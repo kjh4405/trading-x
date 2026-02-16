@@ -1,53 +1,95 @@
 import streamlit as st
 import pandas as pd
 
-# 1. 전산 데이터 초기화 (실제 운영 시 구글 시트 등과 연결 가능)
-if 'member_db' not in st.session_state:
-    st.session_state.member_db = pd.DataFrame([
-        {"ID": "user01", "이름": "홍길동", "직추천": 12, "소실적": 65, "수익($)": 1500.0},
-        {"ID": "user02", "이름": "김철수", "직추천": 5, "소실적": 10, "수익($)": 450.0}
+# 1. 초기 데이터 설정 (전산 DB)
+if 'db' not in st.session_state:
+    st.session_state.db = pd.DataFrame([
+        {"ID": "user01", "이름": "홍길동", "직추천": 12, "소실적": 65, "수익($)": 1500.0, "상태": "활성"},
+        {"ID": "user02", "이름": "김철수", "직추천": 5, "소실적": 10, "수익($)": 450.0, "상태": "활성"}
     ])
 
-# 2. 화면 구성
-st.set_page_config(page_title="Trading X 전산관리", layout="wide")
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
 
-st.sidebar.title("🛠️ 전산 메뉴")
-menu = st.sidebar.radio("이동할 화면", ["관리자 대시보드", "회원 실적 제어", "신규 회원 등록"])
-
-# --- [화면 1: 관리자 대시보드] ---
-if menu == "관리자 대시보드":
-    st.title("📊 전체 전산 현황")
+# --- 로그인 화면 ---
+def login_page():
+    st.title("💎 TRADING X SYSTEM")
+    login_id = st.text_input("아이디")
+    login_pw = st.text_input("비밀번호", type="password")
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("총 등록 인원", f"{len(st.session_state.member_db)} 명")
-    col2.metric("총 발생 리베이트", f"${st.session_state.member_db['수익($)'].sum():,.2f}")
-    col3.metric("이번 달 신규", "2 명")
+    if st.button("접속하기"):
+        if login_id == "admin" and login_pw == "admin123": # 관리자 비번 설정
+            st.session_state.logged_in = True
+            st.session_state.user_role = "Admin"
+            st.rerun()
+        elif login_id in st.session_state.db['ID'].values:
+            st.session_state.logged_in = True
+            st.session_state.user_role = "User"
+            st.session_state.current_user = login_id
+            st.rerun()
+        else:
+            st.error("정보가 올바르지 않습니다.")
 
-    st.subheader("회원 목록 전체 보기")
-    st.dataframe(st.session_state.member_db, use_container_width=True)
+# --- 관리자 페이지 (Admin) ---
+def admin_page():
+    st.title("🛠️ 총괄 관리자 전산")
+    menu = st.sidebar.radio("전산 메뉴", ["전체 현황", "회원 실적 제어", "신규 회원 등록"])
 
-# --- [화면 2: 회원 실적 제어] ---
-elif menu == "회원 실적 제어":
-    st.title("⚙️ 실적 수동 제어")
-    st.write("회원의 실적(직추천, 소실적)을 직접 수정하여 리베이트를 조정합니다.")
+    if menu == "전체 현황":
+        st.subheader("📊 플랫폼 통계")
+        c1, c2 = st.columns(2)
+        c1.metric("총 회원수", len(st.session_state.db))
+        c2.metric("총 지급 수익", f"${st.session_state.db['수익($)'].sum():,.2(f)}")
+        st.dataframe(st.session_state.db, use_container_width=True)
+
+    elif menu == "회원 실적 제어":
+        st.subheader("⚙️ 실적 수동 조정")
+        st.write("랏(Lot) 수나 소실적 인원을 직접 수정하세요.")
+        edited_db = st.data_editor(st.session_state.db)
+        if st.button("전산 데이터 업데이트"):
+            st.session_state.db = edited_db
+            st.success("데이터가 반영되었습니다.")
+
+    elif menu == "신규 회원 등록":
+        st.subheader("👤 회원 강제 등록")
+        with st.form("new_user"):
+            n_id = st.text_input("새 ID")
+            n_name = st.text_input("이름")
+            if st.form_submit_button("등록"):
+                new_data = {"ID": n_id, "이름": n_name, "직추천": 0, "소실적": 0, "수익($)": 0.0, "상태": "활성"}
+                st.session_state.db = pd.concat([st.session_state.db, pd.DataFrame([new_data])], ignore_index=True)
+                st.rerun()
+
+# --- 사용자 페이지 (User) ---
+def user_page():
+    user_info = st.session_state.db[st.session_state.db['ID'] == st.session_state.current_user].iloc[0]
+    st.title(f"👋 {user_info['이름']}님, 반갑습니다.")
     
-    # 데이터 수정 에디터
-    edited_df = st.data_editor(st.session_state.member_db, num_rows="dynamic")
-    
-    if st.button("전산 수정사항 반영하기"):
-        st.session_state.member_db = edited_df
-        st.success("회원 데이터가 성공적으로 업데이트되었습니다!")
+    st.markdown(f"""
+        <div style="padding:20px; border-radius:15px; background-color:#1e293b; color:white;">
+            <h3>나의 누적 리베이트</h3>
+            <h1 style="color:#00F0FF;">${user_info['수익($)']:,.2f}</h1>
+        </div>
+    """, unsafe_allow_html=True)
 
-# --- [화면 3: 신규 회원 등록] ---
-elif menu == "신규 회원 등록":
-    st.title("👤 신규 회원 등록")
-    with st.form("add_user"):
-        new_id = st.text_input("아이디(ID)")
-        new_name = st.text_input("이름")
-        new_direct = st.number_input("직추천 수", min_value=0, step=1)
-        new_weak = st.number_input("소실적 인원", min_value=0, step=1)
-        
-        if st.form_submit_button("등록 실행"):
-            new_row = {"ID": new_id, "이름": new_name, "직추천": new_direct, "소실적": new_weak, "수익($)": 0.0}
-            st.session_state.member_db = pd.concat([st.session_state.member_db, pd.DataFrame([new_row])], ignore_index=True)
-            st.success(f"{new_name} 님이 전산에 등록되었습니다.")
+    st.write("---")
+    col1, col2 = st.columns(2)
+    col1.metric("내 직추천", f"{user_info['직추천']}명")
+    col2.metric("내 소실적", f"{user_info['소실적']}명")
+    
+    st.subheader("📢 공지사항")
+    st.info("현재 15개월 구독 플랜($1,000) 이벤트 중입니다!")
+
+# --- 메인 흐름 제어 ---
+if not st.session_state.logged_in:
+    login_page()
+else:
+    if st.sidebar.button("로그아웃"):
+        st.session_state.logged_in = False
+        st.rerun()
+    
+    if st.session_state.user_role == "Admin":
+        admin_page()
+    else:
+        user_page()
