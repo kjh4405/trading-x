@@ -38,8 +38,8 @@ def init_state():
     if "page" not in st.session_state:
         st.session_state.page = "login"
 
-init_state()
 
+init_state()
 
 # =========================
 # 2) CSS (밝은 테마)
@@ -89,13 +89,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
 # =========================
 # 3) 유틸 함수
 # =========================
 def goto(page: str):
     st.session_state.page = page
     st.rerun()
+
 
 def get_user_row(user_id: str):
     df = st.session_state.db
@@ -165,8 +165,14 @@ def user_dashboard():
 # 5) 페이지: 로그인
 # =========================
 def login_page():
-    st.markdown("<h1 style='text-align: center; color: #2563EB;'>💎 TRADING X</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #64748B;'>정산 관리 시스템에 접속하세요</p>", unsafe_allow_html=True)
+    st.markdown(
+        "<h1 style='text-align: center; color: #2563EB;'>💎 TRADING X</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='text-align: center; color: #64748B;'>정산 관리 시스템에 접속하세요</p>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown('<div class="info-box">', unsafe_allow_html=True)
     l_id = st.text_input("아이디 (ID)")
@@ -185,16 +191,18 @@ def login_page():
     with col2:
         if st.button("회원가입", use_container_width=True):
             goto("signup")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =========================
-# 6) 페이지: 회원가입
+# 6) 페이지: 회원가입 (✅ 입력 즉시 아이디 중복 체크 + 버튼 비활성화)
 # =========================
 def signup_page():
     st.title("📝 회원가입")
 
     st.markdown('<div class="info-box">', unsafe_allow_html=True)
+
     new_id = st.text_input("아이디 (ID)")
     new_pw = st.text_input("비밀번호 (Password)", type="password")
     name = st.text_input("이름")
@@ -202,23 +210,31 @@ def signup_page():
     phone = st.text_input("연락처")
     recommender = st.text_input("추천인(ID) (없으면 -)")
 
+    df = st.session_state.db
+
+    # ✅ 실시간 아이디 중복 체크
+    id_exists = bool(new_id) and (df["ID"] == new_id).any()
+    if id_exists:
+        st.error("이미 존재하는 아이디입니다. 다른 아이디를 입력하세요.")
+
+    # ✅ (선택) 추천인 실시간 체크
+    recommender_invalid = (
+        bool(recommender) and recommender != "-" and not (df["ID"] == recommender).any()
+    )
+    if recommender_invalid:
+        st.warning("추천인 ID가 존재하지 않습니다. '-' 로 입력하거나 정확히 입력하세요.")
+
+    # ✅ 가입 버튼 활성 조건
+    can_submit = (not id_exists) and bool(new_id) and bool(new_pw) and (not recommender_invalid)
+
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("가입하기", type="primary", use_container_width=True):
-            df = st.session_state.db
-
-            if not new_id or not new_pw:
-                st.error("아이디와 비밀번호는 필수입니다.")
-                return
-
-            if (df["ID"] == new_id).any():
-                st.error("이미 존재하는 아이디입니다.")
-                return
-
-            if recommender and recommender != "-" and not (df["ID"] == recommender).any():
-                st.error("추천인 ID가 존재하지 않습니다. '-' 로 입력하거나 정확히 입력하세요.")
-                return
-
+        if st.button(
+            "가입하기",
+            type="primary",
+            use_container_width=True,
+            disabled=not can_submit,
+        ):
             st.session_state.db = pd.concat(
                 [
                     df,
@@ -248,6 +264,7 @@ def signup_page():
     with col2:
         if st.button("취소", use_container_width=True):
             goto("login")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -292,6 +309,7 @@ def pw_manage_page():
     with col2:
         if st.button("뒤로", use_container_width=True):
             goto("user")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -307,7 +325,6 @@ elif page == "signup":
 elif page == "pw_manage":
     pw_manage_page()
 elif page == "user":
-    # 로그인 보호
     if "current_user" not in st.session_state:
         goto("login")
     user_dashboard()
