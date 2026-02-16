@@ -1,76 +1,53 @@
 import streamlit as st
 import pandas as pd
 
-# 페이지 설정
-st.set_page_config(page_title="Trading X Admin", layout="wide")
-
-# 세션 관리 (로그인 상태 및 데이터 저장)
-if 'db' not in st.session_state:
-    # 샘플 데이터베이스 (실제 운영 시 구글 시트나 DB 연결 가능)
-    st.session_state.db = pd.DataFrame([
-        {"ID": "user01", "Name": "홍길동", "Left": 10, "Right": 5, "Rebate": 120.0},
-        {"ID": "user02", "Name": "김철수", "Left": 2, "Right": 8, "Rebate": 45.0}
+# 1. 전산 데이터 초기화 (실제 운영 시 구글 시트 등과 연결 가능)
+if 'member_db' not in st.session_state:
+    st.session_state.member_db = pd.DataFrame([
+        {"ID": "user01", "이름": "홍길동", "직추천": 12, "소실적": 65, "수익($)": 1500.0},
+        {"ID": "user02", "이름": "김철수", "직추천": 5, "소실적": 10, "수익($)": 450.0}
     ])
 
-if 'role' not in st.session_state:
-    st.session_state.role = None
+# 2. 화면 구성
+st.set_page_config(page_title="Trading X 전산관리", layout="wide")
 
-# --- 로그인 로직 ---
-def login():
-    st.title("🔐 TRADING X 시스템 접속")
-    user = st.text_input("아이디")
-    pw = st.text_input("비밀번호", type="password")
+st.sidebar.title("🛠️ 전산 메뉴")
+menu = st.sidebar.radio("이동할 화면", ["관리자 대시보드", "회원 실적 제어", "신규 회원 등록"])
+
+# --- [화면 1: 관리자 대시보드] ---
+if menu == "관리자 대시보드":
+    st.title("📊 전체 전산 현황")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("사용자 로그인"):
-            st.session_state.role = "User"
-            st.rerun()
-    with col2:
-        if st.button("관리자 로그인"):
-            # 관리자 전용 비밀번호 예시 (admin123)
-            if pw == "admin123":
-                st.session_state.role = "Admin"
-                st.rerun()
-            else:
-                st.error("관리자 비밀번호가 틀렸습니다.")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("총 등록 인원", f"{len(st.session_state.member_db)} 명")
+    col2.metric("총 발생 리베이트", f"${st.session_state.member_db['수익($)'].sum():,.2f}")
+    col3.metric("이번 달 신규", "2 명")
 
-# --- 관리자 전산 화면 ---
-def admin_panel():
-    st.title("🛠️ 관리자 전산 제어판")
+    st.subheader("회원 목록 전체 보기")
+    st.dataframe(st.session_state.member_db, use_container_width=True)
+
+# --- [화면 2: 회원 실적 제어] ---
+elif menu == "회원 실적 제어":
+    st.title("⚙️ 실적 수동 제어")
+    st.write("회원의 실적(직추천, 소실적)을 직접 수정하여 리베이트를 조정합니다.")
     
-    # 1. 회원 등록 섹션
-    with st.expander("👤 신규 회원 등록"):
-        new_id = st.text_input("회원 ID")
-        new_name = st.text_input("회원 성함")
-        if st.button("등록 완료"):
-            new_data = {"ID": new_id, "Name": new_name, "Left": 0, "Right": 0, "Rebate": 0.0}
-            st.session_state.db = pd.concat([st.session_state.db, pd.DataFrame([new_data])], ignore_index=True)
-            st.success(f"{new_name} 님이 등록되었습니다.")
-
-    # 2. 전산 데이터 제어
-    st.subheader("📊 전체 회원 실적 관리")
-    edited_db = st.data_editor(st.session_state.db) # 표에서 직접 수정 가능
+    # 데이터 수정 에디터
+    edited_df = st.data_editor(st.session_state.member_db, num_rows="dynamic")
     
-    if st.button("수정사항 저장"):
-        st.session_state.db = edited_db
-        st.success("전산 데이터가 업데이트되었습니다.")
+    if st.button("전산 수정사항 반영하기"):
+        st.session_state.member_db = edited_df
+        st.success("회원 데이터가 성공적으로 업데이트되었습니다!")
 
-    # 3. 리베이트 일괄 계산 기능 (예시)
-    if st.button("🚀 전체 리베이트 정산 실행"):
-        # 1랏당 $6 분배 로직 등을 여기에 코딩
-        st.info("오늘자 거래 내역에 따른 리베이트 정산이 완료되었습니다.")
-
-# --- 메인 실행 흐름 ---
-if st.session_state.role == "Admin":
-    admin_panel()
-    if st.button("로그아웃"):
-        st.session_state.role = None
-        st.rerun()
-elif st.session_state.role == "User":
-    st.write("사용자 화면입니다 (기존 대시보드 코드 연결)")
-    if st.button("로그아웃"):
-        st.session_state.role = None
-        st.rerun()
-else:
-    login()
+# --- [화면 3: 신규 회원 등록] ---
+elif menu == "신규 회원 등록":
+    st.title("👤 신규 회원 등록")
+    with st.form("add_user"):
+        new_id = st.text_input("아이디(ID)")
+        new_name = st.text_input("이름")
+        new_direct = st.number_input("직추천 수", min_value=0, step=1)
+        new_weak = st.number_input("소실적 인원", min_value=0, step=1)
+        
+        if st.form_submit_button("등록 실행"):
+            new_row = {"ID": new_id, "이름": new_name, "직추천": new_direct, "소실적": new_weak, "수익($)": 0.0}
+            st.session_state.member_db = pd.concat([st.session_state.member_db, pd.DataFrame([new_row])], ignore_index=True)
+            st.success(f"{new_name} 님이 전산에 등록되었습니다.")
