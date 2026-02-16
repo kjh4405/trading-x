@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 
-# 1. 전산 DB 초기화 (PW 열 누락 방지 로직 추가)
-if 'db' not in st.session_state:
+# [핵심] 기존 세션에 'PW' 열이 없으면 강제로 초기화하여 에러를 방지합니다.
+if 'db' not in st.session_state or 'PW' not in st.session_state.db.columns:
     st.session_state.db = pd.DataFrame([
         {
             "ID": "admin", "PW": "admin123", "이름": "관리자", 
@@ -28,11 +28,7 @@ st.markdown("""
         padding: 40px; border-radius: 25px; text-align: center; color: white;
         box-shadow: 0 15px 35px rgba(0,240,255,0.25); margin-bottom: 30px;
     }
-    .info-box {
-        background-color: #161B33; border: 1px solid #2E344E; padding: 20px;
-        border-radius: 15px; border-left: 5px solid #00F0FF;
-    }
-    .stButton>button { border-radius: 12px; height: 3em; font-weight: bold; }
+    .stMetric { background-color: #161B33 !important; border-radius: 15px !important; padding: 15px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -57,46 +53,36 @@ def password_management():
             new_pw = st.text_input("변경할 비밀번호", type="password")
             if st.button("비밀번호 업데이트"):
                 idx = st.session_state.db[st.session_state.db['ID'] == st.session_state.current_user].index
-                if st.session_state.db.at[idx[0], 'PW'] == curr_pw:
+                if not idx.empty and st.session_state.db.at[idx[0], 'PW'] == curr_pw:
                     st.session_state.db.at[idx[0], 'PW'] = new_pw
                     st.success("비밀번호가 안전하게 변경되었습니다.")
                 else:
-                    st.error("현재 비밀번호가 일치하지 않습니다.")
+                    st.error("비밀번호가 일치하지 않거나 오류가 발생했습니다.")
         else:
             st.warning("로그인이 필요한 서비스입니다.")
 
-# --- [페이지: 화려한 사용자 대시보드] ---
+# --- [페이지: 대시보드] ---
 def user_dashboard():
     user_info = st.session_state.db[st.session_state.db['ID'] == st.session_state.current_user].iloc[0]
-    
     st.title("📊 My Trading Status")
     
-    # 메인 수익 현황
     st.markdown(f"""
         <div class="main-card">
             <p style="font-size:18px; opacity:0.9; margin-bottom:10px;">Total Trading Profit</p>
             <h1 style="font-size:56px; font-weight:800;">${user_info['수익($)']:,.2f}</h1>
-            <p style="font-size:14px; margin-top:10px;">Status: <span style="color:#00FF00;">● Active</span></p>
         </div>
     """, unsafe_allow_html=True)
 
-    # 핵심 지표
     c1, c2, c3 = st.columns(3)
-    with c1:
-        st.metric("Direct referrals", f"{user_info['직추천']}명")
-    with c2:
-        st.metric("Weak leg members", f"{user_info['소실적']}명")
-    with c3:
-        st.metric("Level Status", "Diamond")
+    c1.metric("Direct referrals", f"{user_info['직추천']}명")
+    c2.metric("Weak leg members", f"{user_info['소실적']}명")
+    c3.metric("Level Status", "Diamond")
 
     st.write("---")
-    
-    # 차트 및 정산 내역
     l_col, r_col = st.columns([2, 1])
     with l_col:
         st.subheader("📈 실적 추이")
-        st.line_chart([10, 25, 45, 30, 60, 55, 80])
-    
+        st.area_chart([20, 35, 45, 80, 60, 90, 110])
     with r_col:
         st.subheader("⚙️ Quick Menu")
         if st.button("비밀번호 변경", use_container_width=True):
@@ -107,7 +93,7 @@ def user_dashboard():
             st.session_state.page = "login"
             st.rerun()
 
-# --- [페이지: 로그인 & 회원가입] ---
+# --- [페이지: 로그인] ---
 def login_page():
     st.title("💎 TRADING X")
     l_id = st.text_input("ID")
@@ -128,11 +114,11 @@ def login_page():
             st.session_state.page = "signup"
             st.rerun()
     
-    if st.button("Forgot Password?", variant="ghost"):
+    if st.button("Forgot Password?", type="secondary"):
         st.session_state.page = "pw_manage"
         st.rerun()
 
-# --- 메인 로직 흐름 ---
+# --- 메인 제어 로직 ---
 if st.session_state.page == "login":
     login_page()
 elif st.session_state.page == "user":
@@ -143,9 +129,16 @@ elif st.session_state.page == "pw_manage":
         st.rerun()
     password_management()
 elif st.session_state.page == "signup":
-    # (회원가입 로직 - 이전 코드 유지하되 PW 필드 필수 포함)
     st.title("📝 회원가입")
-    # ... 가입 코드 ...
+    # 간단한 가입 폼
+    s_id = st.text_input("희망 ID")
+    s_pw = st.text_input("희망 Password", type="password")
+    s_name = st.text_input("성함")
+    if st.button("가입신청"):
+        new_user = {"ID": s_id, "PW": s_pw, "이름": s_name, "이메일": "", "연락처": "", "추천인": "admin", "위치": "Left", "직추천": 0, "소실적": 0, "수익($)": 0.0}
+        st.session_state.db = pd.concat([st.session_state.db, pd.DataFrame([new_user])], ignore_index=True)
+        st.success("가입 완료! 로그인 해주세요.")
+        st.session_state.page = "login"
     if st.button("← Back to Login"):
         st.session_state.page = "login"
         st.rerun()
