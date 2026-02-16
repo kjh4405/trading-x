@@ -19,7 +19,7 @@ def login_page():
     login_pw = st.text_input("비밀번호", type="password")
     
     if st.button("접속하기"):
-        if login_id == "admin" and login_pw == "admin123": # 관리자 비번 설정
+        if login_id == "admin" and login_pw == "admin123":
             st.session_state.logged_in = True
             st.session_state.user_role = "Admin"
             st.rerun()
@@ -40,7 +40,8 @@ def admin_page():
         st.subheader("📊 플랫폼 통계")
         c1, c2 = st.columns(2)
         c1.metric("총 회원수", len(st.session_state.db))
-        c2.metric("총 지급 수익", f"${st.session_state.db['수익($)'].sum():,.2(f)}")
+        # 이 부분의 오타를 수정했습니다! (:,.2f)
+        c2.metric("총 지급 수익", f"${st.session_state.db['수익($)'].sum():,.2f}")
         st.dataframe(st.session_state.db, use_container_width=True)
 
     elif menu == "회원 실적 제어":
@@ -81,7 +82,7 @@ def user_page():
     st.subheader("📢 공지사항")
     st.info("현재 15개월 구독 플랜($1,000) 이벤트 중입니다!")
 
-# --- 메인 흐름 제어 ---
+# --- 메인 실행 흐름 ---
 if not st.session_state.logged_in:
     login_page()
 else:
@@ -93,3 +94,4 @@ else:
         admin_page()
     else:
         user_page()
+        
